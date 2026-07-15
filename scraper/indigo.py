@@ -1,69 +1,80 @@
-"""Indigo (chapters.indigo.ca) price scraper."""
+"""Indigo scraper — uses selectolax for precise price extraction."""
 import httpx
-import re
-from base import HEADERS, fetch, clean_price, rate_limit
+from selectolax.parser import HTMLParser
+from base import HEADERS, fetch, rate_limit
 
 STORE = "Indigo"
-BASE_URL = "https://www.indigo.ca"
-SEARCH_URL = "https://www.indigo.ca/en-ca/search/"
 
 
 def scrape(isbn: str, client: httpx.Client) -> list[dict]:
-    """Scrape Indigo for a book by ISBN. Returns list of price dicts."""
+    """Scrape Indigo for a book by ISBN. Returns precise price data."""
     prices = []
-
-    # Format ISBN for URL (remove hyphens)
     clean_isbn = isbn.replace("-", "").replace(" ", "")
 
-    # Try direct ISBN lookup first
     url = f"https://www.indigo.ca/en-ca/search/?q={clean_isbn}&searchType=products"
     html = fetch(url, client)
-
     if not html:
         return prices
 
     rate_limit(2)
+    tree = HTMLParser(html)
 
-    # Indigo loads prices in a script tag or data attributes
-    # Try to find price in the page
-    price_patterns = [
-        r'"price"\s*:\s*"?(\d+\.?\d*)"?',
-        r'"salePrice"\s*:\s*"?(\d+\.?\d*)"?',
-        r'"listPrice"\s*:\s*"?(\d+\.?\d*)"?',
-        r'data-price\s*=\s*"?(\d+\.?\d*)"?',
-        r'\$(\d+\.?\d*)',
-    ]
+    # Find product cards
+    products = tree.css('[data-product-card], .product-list__product, .product-item')
+    if not products:
+        products = tree.css('a[href*="/en-ca/"]')
 
-    found_price = None
-    for pattern in price_patterns:
-        matches = re.findall(pattern, html)
-        if matches:
-            # Take the first reasonable price (between $1 and $500)
-            for m in matches:
-                p = float(m)
-                if 1.0 < p < 500.0:
-                    found_price = p
+    for product in products[:1]:  # First match only
+        # Try multiple selectors for price
+        price_el = (
+            product.css_first('[data-price]') or
+            product.css_first('.product-item__price--sale') or
+            product.css_first('.price--sale') or
+            product.css_first('[class*="price"]')
+        )
+
+        if price_el:
+            price_text = price_el.text(strip=True)
+            import re
+            match = re.search(r'(\d+\.?\d*)', price_text.replace(",", "").replace("$", ""))
+            if match:
+                price = float(match.group(1))
+                if 1.0 < price < 500.0:
+                    # Try to get MSRP / list price
+                    msrp_el = (
+                        product.css_first('[data-original-price]') or
+                        product.css_first('.product-item__price--original') or
+                        product.css_first('.price--original') or
+                        product.css_first('[class*="list-price"]')
+                    )
+                    msrp = None
+                    if msrp_el:
+                        msrp_text = msrp_el.text(strip=True)
+                        msrp_match = re.search(r'(\d+\.?\d*)', msrp_text.replace(",", "").replace("$", ""))
+                        if msrp_match:
+                            msrp = float(msrp_match.group(1))
+
+                    # Get product URL
+                    link = product.css_first('a[href*="/en-ca/"]')
+                    product_url = link.attributes.get("href", url) if link else url
+                    if product_url.startswith("/"):
+                        product_url = "https://www.indigo.ca" + product_url
+
+                    prices.append({
+                        "store_name": STORE,
+                        "price": price,
+                        "msrp": msrp,
+                        "currency": "CAD",
+                        "condition": "new",
+                        "format": "paperback",
+                        "url": product_url,
+                    })
                     break
-        if found_price:
-            break
-
-    if found_price:
-        # Try to get the product URL
-        url_match = re.search(rf'href="(/en-ca/[^"]*{clean_isbn[:6]}[^"]*)"', html, re.IGNORECASE)
-        product_url = BASE_URL + url_match.group(1) if url_match else url
-
-        prices.append({
-            "store_name": STORE,
-            "price": found_price,
-            "currency": "CAD",
-            "condition": "new",
-            "url": product_url,
-        })
 
     return prices
 
 
 if __name__ == "__main__":
     client = httpx.Client()
-    results = scrape("9780735211292", client)  # Atomic Habits
+    results = scrape("9780735211292", client)
     print(results)

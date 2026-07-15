@@ -1,10 +1,9 @@
-"""AbeBooks price scraper."""
+"""AbeBooks scraper — uses selectolax for precise extraction."""
 import httpx
-import re
+from selectolax.parser import HTMLParser
 from base import HEADERS, fetch, clean_price, rate_limit
 
 STORE = "AbeBooks"
-SEARCH_URL = "https://www.abebooks.com/servlet/SearchResults"
 
 
 def scrape(isbn: str, client: httpx.Client) -> list[dict]:
@@ -14,38 +13,69 @@ def scrape(isbn: str, client: httpx.Client) -> list[dict]:
 
     url = f"https://www.abebooks.com/servlet/SearchResults?isbn={clean_isbn}"
     html = fetch(url, client)
-
     if not html:
         return prices
 
     rate_limit(2)
+    tree = HTMLParser(html)
 
-    # AbeBooks displays prices in predictable patterns
-    price_pattern = r'\$(\d+\.?\d*)'
-    all_prices = re.findall(price_pattern, html)
-    valid_prices = [float(p) for p in all_prices if 1.0 < float(p) < 500.0]
+    # Find price elements on results page
+    price_items = tree.css('.item-price, [class*="price"], .srp-item-price')
 
-    if valid_prices:
-        # Lowest price = usually used, higher = new
-        used_price = min(valid_prices)
-        prices.append({
-            "store_name": STORE,
-            "price": round(used_price, 2),
-            "currency": "USD",
-            "condition": "used",
-            "url": url,
-        })
+    found_prices = []
+    for item in price_items[:10]:
+        text = item.text(strip=True)
+        price = clean_price(text)
+        if price and 1.0 < price < 500.0:
+            # Try to determine condition from nearby elements
+            parent = item.parent
+            condition = "used"
+            if parent:
+                parent_text = parent.text(strip=True).lower()
+                if "new" in parent_text and "used" not in parent_text.replace("new", ""):
+                    condition = "new"
 
-        if len(valid_prices) > 1:
-            new_candidates = [p for p in valid_prices if p > used_price * 1.5]
-            if new_candidates:
-                prices.append({
-                    "store_name": STORE,
-                    "price": round(min(new_candidates), 2),
-                    "currency": "USD",
-                    "condition": "new",
-                    "url": url,
-                })
+            # Get shipping info
+            shipping_el = parent.css_first('[class*="shipping"]') if parent else None
+            found_prices.append({"price": price, "condition": condition})
+
+    if found_prices:
+        # Separate new vs used
+        used = [p for p in found_prices if p["condition"] == "used"]
+        new = [p for p in found_prices if p["condition"] == "new"]
+
+        if used:
+            prices.append({
+                "store_name": STORE,
+                "price": round(min(p["price"] for p in used), 2),
+                "msrp": None,
+                "currency": "USD",
+                "condition": "used",
+                "format": None,
+                "url": url,
+            })
+
+        if new:
+            prices.append({
+                "store_name": STORE,
+                "price": round(min(p["price"] for p in new), 2),
+                "msrp": None,
+                "currency": "USD",
+                "condition": "new",
+                "format": None,
+                "url": url,
+            })
+        elif used:
+            # If all are used, take the cheapest
+            prices = [{
+                "store_name": STORE,
+                "price": round(min(p["price"] for p in found_prices), 2),
+                "msrp": None,
+                "currency": "USD",
+                "condition": "used",
+                "format": None,
+                "url": url,
+            }]
 
     return prices
 

@@ -96,13 +96,15 @@ def save_prices(book_isbn: str, store_prices: list[dict]):
                 "condition", price_data["condition"]
             ).execute()
 
-            # Upsert current price
+            # Upsert current price (with msrp + format)
             supabase.table("prices").upsert({
                 "book_isbn": book_isbn,
                 "store_name": price_data["store_name"],
                 "price": price_data["price"],
+                "msrp": price_data.get("msrp"),
                 "currency": price_data.get("currency", "CAD"),
                 "condition": price_data.get("condition", "new"),
+                "format": price_data.get("format"),
                 "url": price_data["url"],
                 "scraped_at": datetime.now(timezone.utc).isoformat(),
             }).execute()
