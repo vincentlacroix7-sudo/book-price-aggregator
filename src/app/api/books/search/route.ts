@@ -9,66 +9,74 @@ export async function GET(request: Request) {
     return NextResponse.json({ books: [] });
   }
 
-  try {
-    const res = await fetch(
-      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=20&langRestrict=en`
-    );
+  const trimmed = query.trim();
 
-    if (!res.ok) {
-      return NextResponse.json({ error: "Failed to fetch books" }, { status: 500 });
+  try {
+    // 1. Search our own DB first (fast, no rate limit)
+    const { data: dbBooks } = await supabase
+      .from("books")
+      .select("isbn, title, author, cover_url, description, publisher, pages, published_date")
+      .or(`title.ilike.%${trimmed}%,author.ilike.%${trimmed}%,isbn.ilike.%${trimmed}%`)
+      .limit(20);
+
+    const results = (dbBooks || []).map((b) => ({
+      ...b,
+      source: "db",
+    }));
+
+    // Track search popularity for found books
+    for (const book of results) {
+      try {
+        await supabase.rpc("increment_search", { p_isbn: book.isbn });
+      } catch {}
     }
 
-    const data = await res.json();
-    const books = (data.items || []).map((item: any) => {
-      const info = item.volumeInfo;
-      const isbn = info.industryIdentifiers?.[0]?.identifier || `google_${item.id}`;
-      return {
-        isbn,
-        title: info.title || "Unknown Title",
-        author: info.authors?.join(", ") || "Unknown Author",
-        cover_url: info.imageLinks?.thumbnail?.replace("http:", "https:") || "",
-        description: info.description || "",
-        publisher: info.publisher || "",
-        pages: info.pageCount || 0,
-        published_date: info.publishedDate || "",
-      };
-    });
-
-    // Auto-add books to DB + track popularity
-    for (const book of books) {
+    // 2. If few results, try Google Books as fallback
+    if (results.length < 5) {
       try {
-        // Upsert book metadata
-        await supabase.from("books").upsert({
-          isbn: book.isbn,
-          title: book.title,
-          author: book.author,
-          cover_url: book.cover_url,
-          description: book.description,
-          publisher: book.publisher,
-          pages: book.pages,
-          published_date: book.published_date,
-          updated_at: new Date().toISOString(),
-        });
+        const gbRes = await fetch(
+          `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmed)}&maxResults=10&langRestrict=en`,
+          { signal: AbortSignal.timeout(5000) }
+        );
 
-        // Track search popularity
-        await supabase.from("book_popularity").upsert({
-          isbn: book.isbn,
-          search_count: 1,
-          last_searched_at: new Date().toISOString(),
-        }, {
-          onConflict: "isbn",
-          // Increment search_count if already exists
-        });
+        if (gbRes.ok) {
+          const gbData = await gbRes.json();
+          const seenIsbns = new Set(results.map((b) => b.isbn));
 
-        // Increment with raw SQL since upsert can't increment
-        await supabase.rpc("increment_search", { p_isbn: book.isbn }).maybeSingle();
+          for (const item of gbData.items || []) {
+            const info = item.volumeInfo || {};
+            const isbn = info.industryIdentifiers?.[0]?.identifier || `gb_${item.id}`;
+            if (seenIsbns.has(isbn)) continue;
+            seenIsbns.add(isbn);
+
+            const book = {
+              isbn,
+              title: info.title || "Unknown",
+              author: (info.authors || ["Unknown"]).join(", "),
+              cover_url: (info.imageLinks?.thumbnail || "").replace("http:", "https:"),
+              description: (info.description || "").slice(0, 500),
+              publisher: info.publisher || "",
+              pages: info.pageCount || 0,
+              published_date: info.publishedDate || "",
+              source: "google",
+            };
+
+            // Auto-add to DB
+            try {
+              await supabase.from("books").upsert({ ...book, updated_at: new Date().toISOString() });
+              await supabase.rpc("increment_search", { p_isbn: isbn });
+            } catch {}
+
+            results.push(book);
+          }
+        }
       } catch {
-        // Silent fail — search still works even if DB insert fails
+        // Google Books failed — that's OK, we have DB results
       }
     }
 
-    return NextResponse.json({ books });
+    return NextResponse.json({ books: results.slice(0, 20) });
   } catch {
-    return NextResponse.json({ error: "Search failed" }, { status: 500 });
+    return NextResponse.json({ books: [], error: "Search unavailable" }, { status: 500 });
   }
 }
