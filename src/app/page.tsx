@@ -22,35 +22,48 @@ const STORE_LOGOS: Record<string, string> = {
   AbeBooks: "🔵",
 };
 
-function BookCard({ book }: { book: BookDeal }) {
+function BookCard({ book, badge, badgeColor }: { book: BookDeal; badge?: string; badgeColor?: string }) {
   const router = useRouter();
+  const [imgError, setImgError] = useState(false);
 
   return (
     <button
       onClick={() => router.push(`/book/${book.isbn}`)}
       className="group relative bg-zinc-800/50 hover:bg-zinc-800 rounded-xl border border-zinc-700/50 hover:border-zinc-600 transition-all overflow-hidden text-left"
     >
-      <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded text-xs font-bold bg-emerald-500 text-white">
+      {/* Price badge */}
+      <div className={`absolute top-2 right-2 z-20 px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/90 text-white backdrop-blur-sm shadow-lg`}>
         ${book.best_price.toFixed(2)}
       </div>
-      <div className="aspect-[2/3] relative bg-zinc-900">
-        {book.cover_url ? (
-          <Image src={book.cover_url} alt={book.title} fill className="object-cover" sizes="200px" />
+
+      {/* Cover */}
+      <div className="aspect-[2/3] relative bg-zinc-900 overflow-hidden">
+        {book.cover_url && !imgError ? (
+          <Image
+            src={book.cover_url}
+            alt={book.title}
+            fill
+            className="object-cover group-hover:scale-105 transition-transform duration-300"
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+            onError={() => setImgError(true)}
+          />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-700 p-4">
-            <span className="text-zinc-500 text-xs text-center line-clamp-4">{book.title}</span>
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-700 p-3">
+            <span className="text-zinc-500 text-[10px] text-center line-clamp-4 leading-tight">{book.title}</span>
           </div>
         )}
       </div>
-      <div className="p-3 space-y-1.5">
-        <p className="text-sm font-medium text-white line-clamp-1">{book.title}</p>
-        <p className="text-xs text-zinc-400 line-clamp-1">{book.author}</p>
-        <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-1">
-            <span className="text-xs">{STORE_LOGOS[book.best_store] || "⬜"}</span>
-            <span className="text-xs text-zinc-500">{book.best_store}</span>
-          </div>
-          <span className="text-xs text-zinc-500 capitalize">{book.best_condition}</span>
+
+      {/* Info */}
+      <div className="p-2.5 space-y-1">
+        <p className="text-sm font-medium text-white line-clamp-1 leading-tight">{book.title}</p>
+        <p className="text-xs text-zinc-500 line-clamp-1">{book.author}</p>
+        <div className="flex items-center justify-between pt-0.5">
+          <span className="text-[10px] text-zinc-500 flex items-center gap-0.5">
+            <span>{STORE_LOGOS[book.best_store] || "⬜"}</span>
+            <span>{book.best_store}</span>
+          </span>
+          <span className="text-[10px] text-zinc-600 capitalize">{book.best_condition}</span>
         </div>
       </div>
     </button>
@@ -85,8 +98,9 @@ export default function Home() {
       .then((res) => res.json())
       .then((data) => {
         const books = data.books || [];
+        // Best deals: cheapest first
         setDeals(books.slice(0, 6));
-        // Historical lows = same data but shown differently for now
+        // Historical lows: show different subset
         setHistoricalLows(books.slice(0, 6).reverse());
       })
       .finally(() => setLoading(false));
@@ -157,7 +171,9 @@ export default function Home() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {historicalLows.map((book) => (
               <div key={book.isbn} className="relative">
-                <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded text-xs font-bold bg-amber-500 text-white">LOWEST</div>
+                <div className="absolute top-2 left-2 z-30 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white shadow-lg">
+                  LOWEST
+                </div>
                 <BookCard book={book} />
               </div>
             ))}
@@ -167,7 +183,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-zinc-800 py-8 text-center text-sm text-zinc-600">
-        <p>Prices updated every 6 hours. We may earn a commission on qualifying purchases.</p>
+        <p>Prices updated every hour. We may earn a commission on qualifying purchases.</p>
       </footer>
     </div>
   );
