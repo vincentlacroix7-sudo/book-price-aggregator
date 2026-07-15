@@ -1,0 +1,50 @@
+name: Scrape Book Prices
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: "0 */6 * * *"
+  workflow_dispatch:  # Allow manual trigger
+    inputs:
+      mode:
+        description: "Scraper mode"
+        required: true
+        type: choice
+        options:
+          - update
+          - seed
+      limit:
+        description: "Max books to scrape"
+        required: false
+        type: number
+        default: 20
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r scraper/requirements.txt
+
+      - name: Run scraper
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          MODE="${{ github.event.inputs.mode || 'update' }}"
+          LIMIT="${{ github.event.inputs.limit || 20 }}"
+          cd scraper
+          if [ "$MODE" = "seed" ]; then
+            python orchestrator.py --seed --limit $LIMIT
+          else
+            python orchestrator.py --update --limit $LIMIT
+          fi
