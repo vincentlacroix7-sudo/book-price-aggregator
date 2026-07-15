@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 interface BookDeal {
@@ -22,34 +21,35 @@ const STORE_LOGOS: Record<string, string> = {
   AbeBooks: "🔵",
 };
 
-function BookCard({ book, badge, badgeColor }: { book: BookDeal; badge?: string; badgeColor?: string }) {
+function BookCard({ book }: { book: BookDeal }) {
   const router = useRouter();
   const [imgError, setImgError] = useState(false);
 
   return (
     <button
       onClick={() => router.push(`/book/${book.isbn}`)}
-      className="group relative bg-zinc-800/50 hover:bg-zinc-800 rounded-xl border border-zinc-700/50 hover:border-zinc-600 transition-all overflow-hidden text-left"
+      className="group bg-zinc-800/50 hover:bg-zinc-800 rounded-xl border border-zinc-700/50 hover:border-zinc-600 transition-all overflow-hidden text-left w-full"
     >
-      {/* Price badge */}
-      <div className={`absolute top-2 right-2 z-20 px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/90 text-white backdrop-blur-sm shadow-lg`}>
-        ${book.best_price.toFixed(2)}
-      </div>
+      {/* Cover + Price overlay */}
+      <div className="relative w-full" style={{ paddingBottom: "150%" }}>
+        {/* Price badge — top of cover, full width */}
+        <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/80 to-transparent pt-1.5 pb-3 px-2">
+          <span className="text-white font-bold text-sm">${book.best_price.toFixed(2)}</span>
+          <span className="text-zinc-400 text-[10px] ml-1">{book.best_condition}</span>
+        </div>
 
-      {/* Cover */}
-      <div className="aspect-[2/3] relative bg-zinc-900 overflow-hidden">
+        {/* Cover image */}
         {book.cover_url && !imgError ? (
-          <Image
+          <img
             src={book.cover_url}
             alt={book.title}
-            fill
-            className="object-cover group-hover:scale-105 transition-transform duration-300"
-            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 16vw"
+            className="absolute inset-0 w-full h-full object-cover"
+            loading="lazy"
             onError={() => setImgError(true)}
           />
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-700 p-3">
-            <span className="text-zinc-500 text-[10px] text-center line-clamp-4 leading-tight">{book.title}</span>
+          <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-700 p-3">
+            <span className="text-zinc-500 text-[10px] text-center line-clamp-3 leading-tight">{book.title}</span>
           </div>
         )}
       </div>
@@ -58,12 +58,9 @@ function BookCard({ book, badge, badgeColor }: { book: BookDeal; badge?: string;
       <div className="p-2.5 space-y-1">
         <p className="text-sm font-medium text-white line-clamp-1 leading-tight">{book.title}</p>
         <p className="text-xs text-zinc-500 line-clamp-1">{book.author}</p>
-        <div className="flex items-center justify-between pt-0.5">
-          <span className="text-[10px] text-zinc-500 flex items-center gap-0.5">
-            <span>{STORE_LOGOS[book.best_store] || "⬜"}</span>
-            <span>{book.best_store}</span>
-          </span>
-          <span className="text-[10px] text-zinc-600 capitalize">{book.best_condition}</span>
+        <div className="flex items-center gap-1 pt-0.5">
+          <span className="text-[10px]">{STORE_LOGOS[book.best_store] || "⬜"}</span>
+          <span className="text-[10px] text-zinc-500">{book.best_store}</span>
         </div>
       </div>
     </button>
@@ -75,7 +72,7 @@ function SkeletonGrid() {
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="animate-pulse bg-zinc-800/50 rounded-xl border border-zinc-700/50">
-          <div className="aspect-[2/3] bg-zinc-800 rounded-t-xl" />
+          <div className="w-full bg-zinc-800 rounded-t-xl" style={{ paddingBottom: "150%" }} />
           <div className="p-3 space-y-2">
             <div className="h-4 bg-zinc-700 rounded w-3/4" />
             <div className="h-3 bg-zinc-700 rounded w-1/2" />
@@ -98,9 +95,7 @@ export default function Home() {
       .then((res) => res.json())
       .then((data) => {
         const books = data.books || [];
-        // Best deals: cheapest first
         setDeals(books.slice(0, 6));
-        // Historical lows: show different subset
         setHistoricalLows(books.slice(0, 6).reverse());
       })
       .finally(() => setLoading(false));
@@ -171,8 +166,8 @@ export default function Home() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {historicalLows.map((book) => (
               <div key={book.isbn} className="relative">
-                <div className="absolute top-2 left-2 z-30 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white shadow-lg">
-                  LOWEST
+                <div className="absolute top-10 left-1.5 z-30 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-white shadow-lg">
+                  LOW
                 </div>
                 <BookCard book={book} />
               </div>
