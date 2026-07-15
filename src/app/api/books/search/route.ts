@@ -61,8 +61,14 @@ export async function GET(request: Request) {
               source: "google",
             };
 
-            // Auto-add to DB
+            // Auto-add to DB (and update cover if existing)
             try {
+              // Check if book already exists — if so, update cover from Google
+              const existing = await supabase.from("books").select("cover_url").eq("isbn", isbn).single();
+              if (existing.data?.cover_url?.includes("openlibrary")) {
+                // Replace OpenLibrary cover with Google Books cover
+                await supabase.from("books").update({ cover_url: book.cover_url }).eq("isbn", isbn);
+              }
               await supabase.from("books").upsert({ ...book, updated_at: new Date().toISOString() });
               await supabase.rpc("increment_search", { p_isbn: isbn });
             } catch {}
