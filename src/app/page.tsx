@@ -87,15 +87,17 @@ export default function Home() {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [deals, setDeals] = useState<BookDeal[]>([]);
+  const [underFive, setUnderFive] = useState<BookDeal[]>([]);
   const [historicalLows, setHistoricalLows] = useState<BookDeal[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/books/deals")
+    fetch("/api/books/deals?limit=30")
       .then((res) => res.json())
       .then((data) => {
-        const books = data.books || [];
+        const books: BookDeal[] = data.books || [];
         setDeals(books.slice(0, 6));
+        setUnderFive(books.filter((b) => (b.best_price ?? 999) <= 5).slice(0, 6));
         setHistoricalLows(books.slice(0, 6).reverse());
       })
       .finally(() => setLoading(false));
@@ -154,6 +156,22 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
             {deals.map((book) => <BookCard key={book.isbn} book={book} />)}
+          </div>
+        )}
+      </section>
+
+      {/* Under $5 */}
+      <section className="max-w-7xl mx-auto px-4 pb-12">
+        <div className="flex items-center gap-3 mb-6">
+          <span className="text-2xl">💎</span>
+          <h2 className="text-2xl font-bold">Under $5</h2>
+          <span className="text-xs bg-pink-500/20 text-pink-400 px-2 py-0.5 rounded-full font-medium">Steals</span>
+        </div>
+        {loading ? <SkeletonGrid /> : underFive.length === 0 ? (
+          <p className="text-zinc-500">No books under $5 right now.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {underFive.map((book) => <BookCard key={book.isbn} book={book} />)}
           </div>
         )}
       </section>
