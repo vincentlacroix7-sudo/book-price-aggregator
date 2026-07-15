@@ -117,7 +117,12 @@ export default function Home() {
         </h1>
         <p className="text-zinc-500 text-lg mb-8">
           Compare prices across Amazon, Indigo, Book Outlet, AbeBooks & more
-        </p>
+                    </p>
+                    <div className="flex gap-3">
+                      <button onClick={() => router.push("/browse")} className="text-sm text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-lg transition-colors">
+                        📋 Browse All Deals
+                      </button>
+                    </div>
 
         <form onSubmit={handleSearch} className="w-full max-w-xl">
           <div className="relative">
