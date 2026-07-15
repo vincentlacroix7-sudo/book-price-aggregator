@@ -14,10 +14,23 @@ interface StorePrice {
   condition: string; format: string; url: string; discount: number | null;
 }
 
-const STORE_LOGOS: Record<string, string> = { Amazon: "🅰️", Indigo: "🟣", "Book Outlet": "🟠", AbeBooks: "🔵" };
-const STORE_COLORS: Record<string, string> = { Amazon: "border-amber-500/30 hover:border-amber-500", Indigo: "border-purple-500/30 hover:border-purple-500", "Book Outlet": "border-orange-500/30 hover:border-orange-500", AbeBooks: "border-blue-500/30 hover:border-blue-500" };
-
-const FORMAT_ICONS: Record<string, string> = { "New Books": "📘", "Used Books": "📚", "Ebooks": "📱", "Audiobooks": "🎧" };
+const STORE_CONFIG: Record<string, { logo: string; color: string; baseUrl: string; buildUrl: (isbn: string) => string }> = {
+  Amazon: {
+    logo: "🅰️", color: "border-amber-500/30 hover:border-amber-500",
+    baseUrl: "https://www.amazon.ca",
+    buildUrl: (isbn) => `https://www.amazon.ca/dp/${isbn.replace(/-/g, "")}?tag=bookpricechec-20`,
+  },
+  Indigo: {
+    logo: "🟣", color: "border-purple-500/30 hover:border-purple-500",
+    baseUrl: "https://www.indigo.ca",
+    buildUrl: (isbn) => `https://www.indigo.ca/en-ca/search/?q=${isbn.replace(/-/g, "")}&searchType=products`,
+  },
+  AbeBooks: {
+    logo: "🔵", color: "border-blue-500/30 hover:border-blue-500",
+    baseUrl: "https://www.abebooks.com",
+    buildUrl: (isbn) => `https://www.abebooks.com/servlet/SearchResults?isbn=${isbn.replace(/-/g, "")}&sortby=17`,
+  },
+};
 
 export default function BookPage({ params }: { params: Promise<{ isbn: string }> }) {
   const { isbn } = use(params);
@@ -39,7 +52,6 @@ export default function BookPage({ params }: { params: Promise<{ isbn: string }>
       .finally(() => setLoading(false));
   }, [isbn]);
 
-  // Fallback cover from Google Books if OpenLibrary fails
   useEffect(() => {
     if (imgError) {
       fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}`)
@@ -53,10 +65,20 @@ export default function BookPage({ params }: { params: Promise<{ isbn: string }>
 
   if (loading) return <div className="min-h-screen bg-zinc-950 flex items-center justify-center"><div className="animate-spin w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full" /></div>;
 
-  const allPrices = Object.values(sections).flat();
-  const bestPrice = allPrices.length > 0 ? Math.min(...allPrices.map((p) => p.price)) : null;
+  // Build store links
+  const storeLinks = Object.entries(STORE_CONFIG).map(([name, cfg]) => ({
+    name, url: cfg.buildUrl(isbn), logo: cfg.logo, color: cfg.color,
+  }));
 
-  // Star rating renderer
+  // Get scraped prices per store
+  const getStorePrices = (store: string) => {
+    const all: StorePrice[] = [];
+    Object.values(sections).forEach((prices) => {
+      prices.filter((p) => p.store_name === store).forEach((p) => all.push(p));
+    });
+    return all;
+  };
+
   const Stars = ({ rating }: { rating: number }) => (
     <span className="inline-flex items-center gap-0.5 text-amber-400">
       {[1, 2, 3, 4, 5].map((star) => (
@@ -79,7 +101,6 @@ export default function BookPage({ params }: { params: Promise<{ isbn: string }>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-10">
-        {/* Hero section */}
         <div className="flex flex-col md:flex-row gap-8 mb-8">
           <div className="flex-shrink-0 w-44 mx-auto md:mx-0">
             <div className="relative rounded-xl overflow-hidden bg-zinc-800 shadow-2xl" style={{ paddingBottom: "150%" }}>
@@ -91,11 +112,8 @@ export default function BookPage({ params }: { params: Promise<{ isbn: string }>
                 </div>
               )}
             </div>
-            {/* Star rating under cover */}
             {meta?.goodreads_rating && (
-              <div className="mt-2 text-center">
-                <Stars rating={meta.goodreads_rating} />
-              </div>
+              <div className="mt-2 text-center"><Stars rating={meta.goodreads_rating} /></div>
             )}
           </div>
 
@@ -105,7 +123,6 @@ export default function BookPage({ params }: { params: Promise<{ isbn: string }>
               {meta?.author && meta.author !== "—" && <p className="text-lg text-zinc-400 mt-1">by {meta.author}</p>}
             </div>
 
-            {/* Quick info badges */}
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
               {meta?.published_date && <span>📅 {meta.published_date}</span>}
               {meta?.publisher && <span>📘 {meta.publisher}</span>}
@@ -114,67 +131,77 @@ export default function BookPage({ params }: { params: Promise<{ isbn: string }>
               <span className="text-zinc-600">ISBN: {isbn}</span>
             </div>
 
-            {/* External links */}
             <div className="flex gap-2 text-xs">
-              {meta?.goodreads_url && (
-                <a href={meta.goodreads_url} target="_blank" rel="noopener" className="text-amber-400 hover:text-amber-300 bg-amber-400/10 px-2.5 py-1 rounded-full">⭐ Goodreads</a>
-              )}
-              {meta?.storygraph_url && (
-                <a href={meta.storygraph_url} target="_blank" rel="noopener" className="text-purple-400 hover:text-purple-300 bg-purple-400/10 px-2.5 py-1 rounded-full">📊 StoryGraph</a>
-              )}
-              {meta?.amazon_url && (
-                <a href={meta.amazon_url} target="_blank" rel="noopener" className="text-zinc-400 hover:text-zinc-300 bg-zinc-700/50 px-2.5 py-1 rounded-full">🅰️ Amazon</a>
-              )}
+              {meta?.goodreads_url && <a href={meta.goodreads_url} target="_blank" rel="noopener" className="text-amber-400 hover:text-amber-300 bg-amber-400/10 px-2.5 py-1 rounded-full">⭐ Goodreads</a>}
+              {meta?.storygraph_url && <a href={meta.storygraph_url} target="_blank" rel="noopener" className="text-purple-400 hover:text-purple-300 bg-purple-400/10 px-2.5 py-1 rounded-full">📊 StoryGraph</a>}
               <a href={`https://openlibrary.org/isbn/${isbn}`} target="_blank" rel="noopener" className="text-zinc-500 hover:text-zinc-400 bg-zinc-800 px-2.5 py-1 rounded-full">📖 OpenLibrary</a>
             </div>
           </div>
         </div>
 
-        {/* Price comparison by section */}
-        {Object.entries(sections).map(([sectionName, prices]) => {
-          if (prices.length === 0) return null;
-          const sectionBest = Math.min(...prices.map((p) => p.price));
-          return (
-            <div key={sectionName} className="mb-8">
-              <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <span>{FORMAT_ICONS[sectionName] || "💰"}</span>
-                {sectionName}
-                <span className="text-xs font-normal bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">Best: ${sectionBest.toFixed(2)}</span>
-              </h3>
-              <div className="space-y-1.5">
-                {prices.map((p, i) => {
-                  const isBest = p.price === sectionBest;
-                  return (
-                    <a key={i} href={p.url} target="_blank" rel="noopener noreferrer"
-                      className={`flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg border transition-all group ${STORE_COLORS[p.store_name] || "border-zinc-700/50 hover:border-zinc-600"} ${isBest ? "ring-1 ring-emerald-500/50" : ""}`}>
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-lg">{STORE_LOGOS[p.store_name] || "⬜"}</span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{p.store_name}</p>
-                          <p className="text-[10px] text-zinc-500">{p.format || p.condition} {p.discount ? `· -${p.discount}%` : ""}</p>
-                        </div>
-                      </div>
-                      <div className="text-right flex items-center gap-3 flex-shrink-0">
-                        <div>
-                          {isBest && <span className="text-[9px] text-emerald-400 font-semibold block">BEST</span>}
-                          <p className={`text-base font-bold ${isBest ? "text-emerald-400" : "text-white"}`}>${p.price.toFixed(2)}</p>
-                          {p.msrp && p.msrp > p.price && (
-                            <p className="text-[10px] text-zinc-600 line-through">${p.msrp.toFixed(2)}</p>
-                          )}
-                        </div>
-                        <svg className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                      </div>
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+        {/* Store Links — always visible, scraped prices shown when available */}
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          💰 Where to Buy
+        </h3>
 
-        {allPrices.length === 0 && (
-          <div className="text-center py-10 text-zinc-500">
-            <p>No prices yet — our scraper checks every hour.</p>
+        <div className="space-y-2">
+          {storeLinks.map((store) => {
+            const prices = getStorePrices(store.name);
+            const cheapest = prices.length > 0 ? Math.min(...prices.map((p) => p.price)) : null;
+
+            return (
+              <a key={store.name} href={store.url} target="_blank" rel="noopener noreferrer"
+                className={`flex items-center justify-between p-3.5 bg-zinc-800/50 rounded-xl border transition-all group ${store.color} ${cheapest ? "ring-1 ring-emerald-500/50" : ""}`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-xl">{store.logo}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white">{store.name}</p>
+                    {cheapest ? (
+                      <p className="text-xs text-emerald-400">Best price scraped</p>
+                    ) : (
+                      <p className="text-xs text-zinc-500">Click to see current price</p>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right flex items-center gap-3 flex-shrink-0">
+                  {cheapest ? (
+                    <div>
+                      <span className="text-[9px] text-emerald-400 font-semibold block">BEST</span>
+                      <p className="text-lg font-bold text-emerald-400">${cheapest.toFixed(2)}</p>
+                    </div>
+                  ) : (
+                    <span className="text-sm font-medium text-white bg-zinc-700 px-3 py-1 rounded-lg group-hover:bg-zinc-600 transition-colors">
+                      View deal →
+                    </span>
+                  )}
+                  <svg className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                </div>
+              </a>
+            );
+          })}
+        </div>
+
+        {/* Scraped price details (when available) */}
+        {Object.entries(sections).filter(([_, prices]) => prices.length > 0).length > 0 && (
+          <div className="mt-8">
+            <h3 className="text-base font-semibold mb-3 text-zinc-400">📊 Detailed price history</h3>
+            {Object.entries(sections).map(([sectionName, prices]) => {
+              if (prices.length === 0) return null;
+              const sectionBest = Math.min(...prices.map((p) => p.price));
+              return (
+                <div key={sectionName} className="mb-4">
+                  <p className="text-xs text-zinc-500 mb-2">{sectionName} · best: ${sectionBest.toFixed(2)}</p>
+                  <div className="space-y-1">
+                    {prices.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between p-2 bg-zinc-800/30 rounded text-xs">
+                        <span className="text-zinc-400">{STORE_CONFIG[p.store_name]?.logo} {p.store_name} · {p.condition}</span>
+                        <span className="text-white font-medium">${p.price.toFixed(2)} {p.msrp && p.msrp > p.price ? `(was $${p.msrp.toFixed(2)})` : ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </main>
