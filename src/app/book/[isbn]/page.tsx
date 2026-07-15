@@ -9,7 +9,7 @@ interface CommunityPrice { store_name: string; price: number; condition: string;
 
 const STORES: Record<string, { logo: string; buildUrl: (isbn: string) => string }> = {
   Amazon: { logo: "🅰️", buildUrl: (i) => `https://www.amazon.ca/s?k=${i.replace(/-/g, "")}&i=stripbooks&tag=bookpricechec-20` },
-  Indigo: { logo: "🟣", buildUrl: (i) => `https://www.chapters.indigo.ca/en-ca/books/search/?keywords=${i.replace(/-/g, "")}` },
+  Indigo: { logo: "🟣", buildUrl: (i) => `https://www.indigo.ca/en-ca/search/?q=${i.replace(/-/g, "")}` },
   AbeBooks: { logo: "🔵", buildUrl: (i) => `https://www.abebooks.com/servlet/SearchResults?isbn=${i.replace(/-/g, "")}&sortby=17` },
 };
 
