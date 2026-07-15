@@ -2,9 +2,9 @@ name: Scrape Book Prices
 
 on:
   schedule:
-    # Run every 6 hours
-    - cron: "0 */6 * * *"
-  workflow_dispatch:  # Allow manual trigger
+    # Run every 2 hours — unlimited minutes on public repos
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
     inputs:
       mode:
         description: "Scraper mode"
@@ -14,15 +14,20 @@ on:
           - update
           - seed
       limit:
-        description: "Max books to scrape"
+        description: "Max books to scrape PER WORKER"
         required: false
         type: number
-        default: 20
+        default: 100
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # 5 parallel workers, each handles a different slice of books
+        shard: [1, 2, 3, 4, 5]
 
     steps:
       - uses: actions/checkout@v4
@@ -35,16 +40,23 @@ jobs:
       - name: Install dependencies
         run: pip install -r scraper/requirements.txt
 
-      - name: Run scraper
+      - name: Run scraper (shard ${{ matrix.shard }})
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           MODE="${{ github.event.inputs.mode || 'update' }}"
-          LIMIT="${{ github.event.inputs.limit || 20 }}"
+          LIMIT="${{ github.event.inputs.limit || 100 }}"
+          SHARD="${{ matrix.shard }}"
+          TOTAL_SHARDS=5
+
           cd scraper
+
           if [ "$MODE" = "seed" ]; then
             python orchestrator.py --seed --limit $LIMIT
           else
-            python orchestrator.py --update --limit $LIMIT
+            # Each shard scrapes a different offset of books
+            # Shard 1: books 0-99, Shard 2: books 100-199, etc.
+            OFFSET=$(( (SHARD - 1) * LIMIT ))
+            python orchestrator.py --update --limit $LIMIT --offset $OFFSET
           fi

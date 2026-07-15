@@ -67,22 +67,22 @@ def seed_database():
     print(f"  ✅ {len(SEED_BOOKS)} books seeded")
 
 
-def get_books_to_scrape(limit: int, update_mode: bool) -> list[dict]:
-    """Get books to scrape: seed first, then by popularity, then by staleness."""
+def get_books_to_scrape(limit: int, update_mode: bool, offset: int = 0) -> list[dict]:
+    """Get books to scrape: seed first, then by staleness with optional offset for sharding."""
     if not update_mode:
         return SEED_BOOKS[:limit]
 
     try:
-        # Priority: popular books that haven't been updated recently
+        # Oldest updated first, with shard offset
         result = supabase.table("books") \
             .select("isbn,title,author") \
             .order("updated_at", desc=False) \
-            .limit(limit) \
+            .range(offset, offset + limit - 1) \
             .execute()
         return result.data or []
     except Exception as e:
         print(f"⚠️ Failed to fetch books from DB: {e}")
-        return SEED_BOOKS[:limit]
+        return SEED_BOOKS[offset:offset+limit] if not update_mode else []
 
 
 def save_prices(book_isbn: str, store_prices: list[dict]):
