@@ -7,9 +7,12 @@ interface BookMeta { title: string; author: string; publisher: string; pages: nu
 interface StorePrice { store_name: string; price: number; msrp: number | null; currency: string; condition: string; format: string; url: string; discount: number | null; scraped_at?: string; }
 interface CommunityPrice { store_name: string; price: number; condition: string; submitted_at: string; }
 
-const STORES: Record<string, { logo: string; buildUrl: (isbn: string) => string }> = {
+const STORES: Record<string, { logo: string; buildUrl: (isbn: string, title?: string, author?: string) => string }> = {
   Amazon: { logo: "🅰️", buildUrl: (i) => `https://www.amazon.ca/s?k=${i.replace(/-/g, "")}&i=stripbooks&tag=bookpricechec-20` },
-  Indigo: { logo: "🟣", buildUrl: (i) => `https://www.google.com/search?q=site:indigo.ca+${i.replace(/-/g, "")}&btnI` },
+  Indigo: { logo: "🟣", buildUrl: (i, t, a) => {
+    const query = t && a ? `${t} ${a}`.replace(/\s+/g, "+") : i.replace(/-/g, "");
+    return `https://www.google.com/search?q=site:indigo.ca+${query}&btnI`;
+  }},
   AbeBooks: { logo: "🔵", buildUrl: (i) => `https://www.abebooks.com/servlet/SearchResults?isbn=${i.replace(/-/g, "")}&sortby=17` },
 };
 
@@ -45,8 +48,9 @@ export default function BookPage({ params }: { params: Promise<{ isbn: string }>
     Promise.all([
       fetch(`/api/books/${isbn}/prices`).then((r) => r.json()),
       fetch(`/api/books/${isbn}/community-prices`).then((r) => r.json()),
-    ]).then(([priceData, commData]) => {
-      setMeta(priceData.book);
+      fetch(`/api/books/${isbn}/info`).then((r) => r.json()).catch(() => ({})),
+    ]).then(([priceData, commData, infoData]) => {
+      setMeta(priceData.book || infoData);
       // Flatten all sections into one array, keep only Amazon
       const all = Object.values(priceData.sections || {}).flat() as StorePrice[];
       setScrapedPrices(all.filter((p) => p.store_name === "Amazon"));
@@ -117,7 +121,7 @@ export default function BookPage({ params }: { params: Promise<{ isbn: string }>
           {Object.entries(STORES).map(([name, store]) => {
             const scraped = getScrapedPrice(name);
             const comm = getCommunityPrice(name);
-            const url = store.buildUrl(isbn);
+            const url = store.buildUrl(isbn, meta?.title, meta?.author);
 
             return (
               <div key={name} className="bg-zinc-800/50 rounded-xl border border-zinc-700/50 overflow-hidden">
