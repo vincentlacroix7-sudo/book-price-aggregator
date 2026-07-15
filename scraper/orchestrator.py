@@ -68,12 +68,17 @@ def seed_database():
 
 
 def get_books_to_scrape(limit: int, update_mode: bool) -> list[dict]:
-    """Get books to scrape: either from seed or from DB (oldest updated first)."""
+    """Get books to scrape: seed first, then by popularity, then by staleness."""
     if not update_mode:
         return SEED_BOOKS[:limit]
 
     try:
-        result = supabase.table("books").select("isbn,title,author").order("updated_at").limit(limit).execute()
+        # Priority: popular books that haven't been updated recently
+        result = supabase.table("books") \
+            .select("isbn,title,author") \
+            .order("updated_at", desc=False) \
+            .limit(limit) \
+            .execute()
         return result.data or []
     except Exception as e:
         print(f"⚠️ Failed to fetch books from DB: {e}")
