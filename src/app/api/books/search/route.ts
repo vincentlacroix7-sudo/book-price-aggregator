@@ -35,7 +35,7 @@ export async function GET(request: Request) {
     if (results.length < 5) {
       try {
         const gbRes = await fetch(
-          `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmed)}&maxResults=10&langRestrict=en`,
+          `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(trimmed)}&maxResults=10&langRestrict=en&key=${process.env.GOOGLE_BOOKS_API_KEY}`,
           { signal: AbortSignal.timeout(5000) }
         );
 
