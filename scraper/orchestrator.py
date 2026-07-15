@@ -159,9 +159,8 @@ def run(limit: int = 50, update_mode: bool = False):
                 except Exception as e:
                     print(f"  ❌ {store_name}: error — {e}")
 
-                rate_limit(0.5)  # Be nice to servers (reduced from 1.5s)
-
-        rate_limit(0.3)  # Between books (reduced from 1s)
+                rate_limit(0.3)  # Reduced for faster scraping
+        rate_limit(0.2)  # Between books
 
     print(f"\n{'='*60}")
     print(f"✅ Done! {total_prices} prices saved for {len(books)} books.")

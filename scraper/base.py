@@ -22,7 +22,7 @@ def fetch(url: str, client: httpx.Client, retries: int = 2) -> Optional[str]:
             if resp.status_code == 200:
                 return resp.text
             elif resp.status_code == 429:
-                wait = (attempt + 1) * 5
+                wait = (attempt + 1) * 2  # Reduced from 5s to avoid timeouts
                 print(f"  ⚠️ Rate limited, waiting {wait}s...")
                 time.sleep(wait)
             elif resp.status_code == 404:
