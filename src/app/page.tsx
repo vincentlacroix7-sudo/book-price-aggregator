@@ -37,7 +37,9 @@ function BookCard({ book }: { book: BookDeal }) {
         {book.cover_url ? (
           <Image src={book.cover_url} alt={book.title} fill className="object-cover" sizes="200px" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-zinc-600 text-4xl">📖</div>
+          <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-700 p-4">
+            <span className="text-zinc-500 text-xs text-center line-clamp-4">{book.title}</span>
+          </div>
         )}
       </div>
       <div className="p-3 space-y-1.5">
