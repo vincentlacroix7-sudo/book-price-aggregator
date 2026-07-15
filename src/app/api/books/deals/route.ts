@@ -9,6 +9,7 @@ export async function GET(request: Request) {
     const { data: prices, error } = await supabase
       .from("prices")
       .select(`price, currency, condition, format, url, store_name, books!inner(isbn, title, author, cover_url)`)
+      .eq("store_name", "Amazon")
       .order("scraped_at", { ascending: false })
       .limit(200);
 
