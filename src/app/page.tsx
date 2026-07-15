@@ -1,71 +1,72 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 
-// Mock data — will be replaced by Supabase queries once scraper is live
-const BEST_DEALS = [
-  { isbn: "9780735211292", title: "Atomic Habits", author: "James Clear", cover: "http://books.google.com/books/content?id=XfFvDwAAQBAJ&printsec=frontcover&img=1&zoom=5", store: "Amazon", price: 12.99, oldPrice: 24.00, condition: "new" },
-  { isbn: "9781982137274", title: "The 48 Laws of Power", author: "Robert Greene", cover: "http://books.google.com/books/content?id=LlHeEAAAQBAJ&printsec=frontcover&img=1&zoom=5", store: "Indigo", price: 18.50, oldPrice: 35.00, condition: "new" },
-  { isbn: "9780062316097", title: "Sapiens", author: "Yuval Noah Harari", cover: "http://books.google.com/books/content?id=1EiSDQAAQBAJ&printsec=frontcover&img=1&zoom=5", store: "Book Outlet", price: 9.99, oldPrice: 27.99, condition: "new" },
-  { isbn: "9780385545969", title: "The Midnight Library", author: "Matt Haig", cover: "http://books.google.com/books/content?id=7m0MEAAAQBAJ&printsec=frontcover&img=1&zoom=5", store: "Amazon", price: 14.99, oldPrice: 26.00, condition: "used" },
-  { isbn: "9781250277732", title: "Project Hail Mary", author: "Andy Weir", cover: "http://books.google.com/books/content?id=3zUAEAAAQBAJ&printsec=frontcover&img=1&zoom=5", store: "AbeBooks", price: 11.25, oldPrice: 22.99, condition: "new" },
-  { isbn: "9780441013593", title: "Dune", author: "Frank Herbert", cover: "http://books.google.com/books/content?id=B1hZAAAAYAAJ&printsec=frontcover&img=1&zoom=5", store: "Amazon", price: 8.99, oldPrice: 19.99, condition: "new" },
-];
-
-const HISTORICAL_LOWS = [
-  { isbn: "9780316017930", title: "The Tipping Point", author: "Malcolm Gladwell", cover: "http://books.google.com/books/content?id=9bcdAAAAMBAJ&printsec=frontcover&img=1&zoom=5", store: "Book Outlet", price: 6.99, lowest: 6.99 },
-  { isbn: "9780385480017", title: "Into the Wild", author: "Jon Krakauer", cover: "http://books.google.com/books/content?id=Qd0_AAAAQBAJ&printsec=frontcover&img=1&zoom=5", store: "Amazon", price: 7.50, lowest: 7.50 },
-  { isbn: "9780143126560", title: "Thinking, Fast and Slow", author: "Daniel Kahneman", cover: "http://books.google.com/books/content?id=ZuKTvERuPG8C&printsec=frontcover&img=1&zoom=5", store: "Better World Books", price: 9.25, lowest: 9.25 },
-  { isbn: "9781501127625", title: "Shoe Dog", author: "Phil Knight", cover: "http://books.google.com/books/content?id=ZtUeCgAAQBAJ&printsec=frontcover&img=1&zoom=5", store: "AbeBooks", price: 5.99, lowest: 5.99 },
-  { isbn: "9780812981605", title: "Educated", author: "Tara Westover", cover: "http://books.google.com/books/content?id=2ObVDgAAQBAJ&printsec=frontcover&img=1&zoom=5", store: "Indigo", price: 10.99, lowest: 10.99 },
-  { isbn: "9780307277671", title: "The Road", author: "Cormac McCarthy", cover: "http://books.google.com/books/content?id=PFIb0z3CqF4C&printsec=frontcover&img=1&zoom=5", store: "Amazon", price: 8.49, lowest: 8.49 },
-];
+interface BookDeal {
+  isbn: string;
+  title: string;
+  author: string;
+  cover_url: string;
+  best_price: number;
+  best_store: string;
+  best_condition: string;
+  prices: { store_name: string; price: number; currency: string; condition: string; url: string }[];
+}
 
 const STORE_LOGOS: Record<string, string> = {
   Amazon: "🅰️",
   Indigo: "🟣",
   "Book Outlet": "🟠",
   AbeBooks: "🔵",
-  "Better World Books": "🟢",
 };
 
-function BookCard({ book, badge, badgeColor }: { book: any; badge?: string; badgeColor?: string }) {
-  const savings = book.oldPrice ? Math.round((1 - book.price / book.oldPrice) * 100) : null;
+function BookCard({ book }: { book: BookDeal }) {
+  const router = useRouter();
 
   return (
-    <div className="group relative bg-zinc-800/50 hover:bg-zinc-800 rounded-xl border border-zinc-700/50 hover:border-zinc-600 transition-all overflow-hidden cursor-pointer">
-      {badge && (
-        <div className={`absolute top-2 left-2 z-10 px-2 py-0.5 rounded text-xs font-bold ${badgeColor}`}>
-          {badge}
-        </div>
-      )}
+    <button
+      onClick={() => router.push(`/book/${book.isbn}`)}
+      className="group relative bg-zinc-800/50 hover:bg-zinc-800 rounded-xl border border-zinc-700/50 hover:border-zinc-600 transition-all overflow-hidden text-left"
+    >
+      <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded text-xs font-bold bg-emerald-500 text-white">
+        ${book.best_price.toFixed(2)}
+      </div>
       <div className="aspect-[2/3] relative bg-zinc-900">
-        <Image
-          src={book.cover}
-          alt={book.title}
-          fill
-          className="object-cover"
-          sizes="200px"
-        />
+        {book.cover_url ? (
+          <Image src={book.cover_url} alt={book.title} fill className="object-cover" sizes="200px" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-zinc-600 text-4xl">📖</div>
+        )}
       </div>
       <div className="p-3 space-y-1.5">
         <p className="text-sm font-medium text-white line-clamp-1">{book.title}</p>
         <p className="text-xs text-zinc-400 line-clamp-1">{book.author}</p>
         <div className="flex items-center justify-between pt-1">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs">{STORE_LOGOS[book.store] || "⬜"}</span>
-            <span className="text-xs text-zinc-500">{book.store}</span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs">{STORE_LOGOS[book.best_store] || "⬜"}</span>
+            <span className="text-xs text-zinc-500">{book.best_store}</span>
           </div>
-          <div className="text-right">
-            {savings && (
-              <span className="text-xs text-emerald-400 font-medium block">-{savings}%</span>
-            )}
-            <span className="text-lg font-bold text-white">${book.price.toFixed(2)}</span>
-          </div>
+          <span className="text-xs text-zinc-500 capitalize">{book.best_condition}</span>
         </div>
       </div>
+    </button>
+  );
+}
+
+function SkeletonGrid() {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="animate-pulse bg-zinc-800/50 rounded-xl border border-zinc-700/50">
+          <div className="aspect-[2/3] bg-zinc-800 rounded-t-xl" />
+          <div className="p-3 space-y-2">
+            <div className="h-4 bg-zinc-700 rounded w-3/4" />
+            <div className="h-3 bg-zinc-700 rounded w-1/2" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -73,6 +74,21 @@ function BookCard({ book, badge, badgeColor }: { book: any; badge?: string; badg
 export default function Home() {
   const router = useRouter();
   const [query, setQuery] = useState("");
+  const [deals, setDeals] = useState<BookDeal[]>([]);
+  const [historicalLows, setHistoricalLows] = useState<BookDeal[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/books/deals")
+      .then((res) => res.json())
+      .then((data) => {
+        const books = data.books || [];
+        setDeals(books.slice(0, 6));
+        // Historical lows = same data but shown differently for now
+        setHistoricalLows(books.slice(0, 6).reverse());
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,10 +117,7 @@ export default function Home() {
               placeholder="Search by title, author, or ISBN..."
               className="w-full h-14 pl-6 pr-14 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all text-lg"
             />
-            <button
-              type="submit"
-              className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 rounded-lg transition-colors"
-            >
+            <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 rounded-lg transition-colors">
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -120,11 +133,13 @@ export default function Home() {
           <h2 className="text-2xl font-bold">Best Deals Right Now</h2>
           <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full font-medium">Live</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {BEST_DEALS.map((book) => (
-            <BookCard key={book.isbn} book={book} badge={`-${Math.round((1 - book.price / book.oldPrice) * 100)}%`} badgeColor="bg-emerald-500 text-white" />
-          ))}
-        </div>
+        {loading ? <SkeletonGrid /> : deals.length === 0 ? (
+          <p className="text-zinc-500">No deals yet — scraper is collecting data.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {deals.map((book) => <BookCard key={book.isbn} book={book} />)}
+          </div>
+        )}
       </section>
 
       {/* Historical Lows */}
@@ -134,16 +149,23 @@ export default function Home() {
           <h2 className="text-2xl font-bold">Historical Lows</h2>
           <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-medium">Lowest Ever</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          {HISTORICAL_LOWS.map((book) => (
-            <BookCard key={book.isbn} book={book} badge="LOWEST" badgeColor="bg-amber-500 text-white" />
-          ))}
-        </div>
+        {loading ? <SkeletonGrid /> : historicalLows.length === 0 ? (
+          <p className="text-zinc-500">Historical data being collected — check back soon.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {historicalLows.map((book) => (
+              <div key={book.isbn} className="relative">
+                <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded text-xs font-bold bg-amber-500 text-white">LOWEST</div>
+                <BookCard book={book} />
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Footer */}
       <footer className="border-t border-zinc-800 py-8 text-center text-sm text-zinc-600">
-        <p>Prices updated daily. We may earn a commission on purchases made through our links.</p>
+        <p>Prices updated every 6 hours. We may earn a commission on qualifying purchases.</p>
       </footer>
     </div>
   );
